@@ -1,0 +1,102 @@
+@import "tailwindcss";
+
+/*
+ * Design tokens. Components use semantic names (surface, fg, accent...) so light and
+ * dark themes are a token swap, not per-component overrides. Muted text colours meet
+ * WCAG AA (≥ 4.5:1) against both surfaces.
+ */
+:root {
+  color-scheme: light;
+  --canvas: #f5f6fa;
+  --surface: #ffffff;
+  --surface-muted: #f0f2f7;
+  --border: #e2e5ee;
+  --border-strong: #c3c9d8;
+  --fg: #111827;
+  --fg-muted: #535c70;
+  --accent: #4f46e5;
+  --accent-hover: #4338ca;
+  --accent-fg: #ffffff;
+  --accent-soft: #eef0ff;
+  --focus: #4f46e5;
+  --danger: #dc2626;
+  --danger-soft: #fef2f2;
+  --danger-strong: #991b1b;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    color-scheme: dark;
+    --canvas: #0a0e17;
+    --surface: #111726;
+    --surface-muted: #1a2234;
+    --border: #253047;
+    --border-strong: #3a4763;
+    --fg: #e7eaf2;
+    --fg-muted: #9aa4ba;
+    --accent: #818cf8;
+    --accent-hover: #a5b4fc;
+    --accent-fg: #0a0e17;
+    --accent-soft: #1d2044;
+    --focus: #a5b4fc;
+    --danger: #f87171;
+    --danger-soft: #2a1216;
+    --danger-strong: #fecaca;
+  }
+}
+
+@theme inline {
+  --color-canvas: var(--canvas);
+  --color-surface: var(--surface);
+  --color-surface-muted: var(--surface-muted);
+  --color-border: var(--border);
+  --color-border-strong: var(--border-strong);
+  --color-fg: var(--fg);
+  --color-fg-muted: var(--fg-muted);
+  --color-accent: var(--accent);
+  --color-accent-hover: var(--accent-hover);
+  --color-accent-fg: var(--accent-fg);
+  --color-accent-soft: var(--accent-soft);
+  --color-focus: var(--focus);
+  --color-danger: var(--danger);
+  --color-danger-soft: var(--danger-soft);
+  --color-danger-strong: var(--danger-strong);
+
+  --font-sans: var(--font-geist-sans), ui-sans-serif, system-ui, sans-serif;
+  --font-mono: var(--font-geist-mono), ui-monospace, "SFMono-Regular", monospace;
+}
+
+/* Transparent-image backdrop, so previews of PNGs with alpha stay legible. */
+@utility bg-checkerboard {
+  background-color: var(--surface-muted);
+  background-image:
+    linear-gradient(45deg, var(--border) 25%, transparent 25%),
+    linear-gradient(-45deg, var(--border) 25%, transparent 25%),
+    linear-gradient(45deg, transparent 75%, var(--border) 75%),
+    linear-gradient(-45deg, transparent 75%, var(--border) 75%);
+  background-size: 16px 16px;
+  background-position:
+    0 0,
+    0 8px,
+    8px -8px,
+    -8px 0;
+}
+
+@layer base {
+  body {
+    background-color: var(--canvas);
+    color: var(--fg);
+    -webkit-font-smoothing: antialiased;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  ::before,
+  ::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}

@@ -1,0 +1,39 @@
+# Local full-stack run:  docker compose up --build
+#   Frontend → http://localhost:3000
+#   Backend  → http://localhost:8000  (OpenAPI docs at /docs)
+
+name: shape-detection
+
+services:
+  backend:
+    build: ./backend
+    ports:
+      - "8000:8000"
+    env_file:
+      # Optional overrides for any setting in backend/.env.example.
+      - path: ./backend/.env
+        required: false
+    environment:
+      ENVIRONMENT: production
+      LOG_FORMAT: json
+      # The browser calls the API directly, so CORS must allow the frontend origin.
+      ALLOWED_ORIGINS: http://localhost:3000
+    # Uploads are processed in memory; the filesystem stays read-only.
+    read_only: true
+    tmpfs:
+      - /tmp
+    restart: unless-stopped
+
+  frontend:
+    build:
+      context: ./frontend
+      args:
+        # Baked into the client bundle: the URL the *browser* uses to reach the API.
+        NEXT_PUBLIC_API_URL: http://localhost:8000
+        NEXT_PUBLIC_MAX_UPLOAD_MB: "10"
+    ports:
+      - "3000:3000"
+    depends_on:
+      backend:
+        condition: service_healthy
+    restart: unless-stopped
