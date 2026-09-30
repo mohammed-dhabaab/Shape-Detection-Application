@@ -12,7 +12,7 @@ import cv2
 import numpy as np
 from numpy.typing import NDArray
 
-ShapeName = Literal["circle", "triangle", "square", "rectangle", "pentagon", "hexagon"]
+ShapeName = Literal["circle", "ellipse", "triangle", "square", "rectangle", "pentagon", "hexagon"]
 BGR = tuple[int, int, int]
 
 WHITE: BGR = (255, 255, 255)
@@ -27,7 +27,8 @@ class ShapeSpec:
     """A shape to draw.
 
     ``size`` is the radius for circles/regular polygons and the width for squares and
-    rectangles. Rectangles use ``aspect`` (height / width).
+    rectangles. Rectangles use ``aspect`` (height / width); ellipses use ``size`` as the
+    semi-major axis and ``aspect`` as the minor/major axis ratio.
     """
 
     name: ShapeName
@@ -40,6 +41,9 @@ class ShapeSpec:
 
     def points(self) -> NDArray[np.int32]:
         cx, cy = self.center
+        if self.name == "ellipse":
+            axes = (self.size, round(self.size * self.aspect))
+            return cv2.ellipse2Poly(self.center, axes, round(self.rotation_deg), 0, 360, 1)
         if self.name in ("square", "rectangle"):
             height = self.size if self.name == "square" else self.size * self.aspect
             box = cv2.boxPoints(((cx, cy), (self.size, height), self.rotation_deg))

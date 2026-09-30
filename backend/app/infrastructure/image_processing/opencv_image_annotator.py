@@ -4,6 +4,7 @@ from collections.abc import Sequence
 from dataclasses import dataclass
 
 import cv2
+import numpy as np
 from cv2.typing import MatLike
 
 from app.application.dto import DecodedImage, EncodedImage
@@ -13,6 +14,7 @@ from app.domain.entities import Detection, ShapeType
 # so the annotated image and the results list share a visual language.
 _SHAPE_COLORS: dict[ShapeType, tuple[int, int, int]] = {
     ShapeType.CIRCLE: (235, 99, 37),  # #2563eb
+    ShapeType.ELLIPSE: (119, 39, 219),  # #db2777
     ShapeType.TRIANGLE: (74, 163, 22),  # #16a34a
     ShapeType.SQUARE: (38, 38, 220),  # #dc2626
     ShapeType.RECTANGLE: (6, 119, 217),  # #d97706
@@ -88,8 +90,16 @@ def _draw_detection(
     color = _SHAPE_COLORS[detection.shape]
     bbox = detection.bbox
     top_left = (round(bbox.x1 * scale), round(bbox.y1 * scale))
-    bottom_right = (round(bbox.x2 * scale) - 1, round(bbox.y2 * scale) - 1)
-    cv2.rectangle(canvas, top_left, bottom_right, color, stroke, cv2.LINE_AA)
+    if detection.outline is not None:
+        # Trace the shape itself; the box is only a fallback for box-only detectors.
+        points = np.array([(p.x, p.y) for p in detection.outline.points], dtype=np.float64)
+        polygon = np.rint(points * scale).astype(np.int32)
+        cv2.polylines(
+            canvas, [polygon], isClosed=True, color=color, thickness=stroke, lineType=cv2.LINE_AA
+        )
+    else:
+        bottom_right = (round(bbox.x2 * scale) - 1, round(bbox.y2 * scale) - 1)
+        cv2.rectangle(canvas, top_left, bottom_right, color, stroke, cv2.LINE_AA)
 
     label = f"#{number} {detection.shape.value} {detection.score.value:.0%}"
     text_thickness = max(1, stroke // 2)

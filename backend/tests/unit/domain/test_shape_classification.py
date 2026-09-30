@@ -17,6 +17,7 @@ def polygon(vertex_count: int, angle: float, **overrides: float) -> ShapeFeature
         aspect_ratio=1.0,
         polygon_fit=1.0,
         enclosing_circle_fill=0.6,
+        ellipse_fit=0.9,
         interior_angles=(angle,) * vertex_count,
     )
     return replace(features, **overrides)
@@ -29,14 +30,20 @@ CIRCLE = ShapeFeatures(
     aspect_ratio=1.0,
     polygon_fit=0.9,
     enclosing_circle_fill=0.97,
+    ellipse_fit=0.998,
     interior_angles=(135.0,) * 8,
 )
+
+# An oval with axis ratio ~0.6: a near-perfect ellipse that fills little of its
+# enclosing circle.
+ELLIPSE = replace(CIRCLE, circularity=0.93, aspect_ratio=0.6, enclosing_circle_fill=0.6)
 
 
 @pytest.mark.parametrize(
     ("features", "expected"),
     [
         (CIRCLE, ShapeType.CIRCLE),
+        (ELLIPSE, ShapeType.ELLIPSE),
         (polygon(3, 60), ShapeType.TRIANGLE),
         (polygon(4, 90), ShapeType.SQUARE),
         (polygon(4, 90, aspect_ratio=0.5), ShapeType.RECTANGLE),
@@ -68,6 +75,31 @@ def test_hexagon_is_not_mistaken_for_circle() -> None:
 
     assert classification is not None
     assert classification.shape is ShapeType.HEXAGON
+
+
+def test_hexagon_beats_ellipse_when_its_polygon_match_is_better() -> None:
+    # Regular hexagons are fairly elliptical (fit ~0.96) but match a hexagon better.
+    hexagon = polygon(6, 120, circularity=0.9, enclosing_circle_fill=0.83, ellipse_fit=0.96)
+
+    classification = classifier.classify(hexagon)
+
+    assert classification is not None
+    assert classification.shape is ShapeType.HEXAGON
+
+
+def test_octagon_is_not_mistaken_for_circle() -> None:
+    # A regular octagon fills its enclosing circle like a circle does (~0.90) but its
+    # outline deviates measurably from an ellipse (fit ~0.979).
+    octagon = replace(CIRCLE, enclosing_circle_fill=0.9, ellipse_fit=0.979)
+
+    assert classifier.classify(octagon) is None
+
+
+def test_ellipse_similarity_reflects_fit_quality() -> None:
+    classification = classifier.classify(replace(ELLIPSE, ellipse_fit=0.99))
+
+    assert classification is not None
+    assert classification.similarity == pytest.approx(0.99 * ELLIPSE.solidity)
 
 
 def test_square_tolerance_boundary() -> None:

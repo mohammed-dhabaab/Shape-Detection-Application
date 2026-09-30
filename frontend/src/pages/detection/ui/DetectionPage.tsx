@@ -37,8 +37,8 @@ export function DetectionPage({ detect }: DetectionPageProps = {}) {
             Detect geometric shapes in your images
           </h1>
           <p className="text-pretty text-fg-muted">
-            Upload an image to find circles, triangles, squares, rectangles, pentagons and hexagons.
-            Each shape is located, classified and scored.
+            Upload an image to find circles, ellipses, triangles, squares, rectangles, pentagons and
+            hexagons. Each shape is located, classified and scored.
           </p>
         </div>
 

@@ -2,6 +2,7 @@
 
 export const SHAPE_CLASSES = [
   "circle",
+  "ellipse",
   "triangle",
   "square",
   "rectangle",
@@ -30,6 +31,11 @@ export interface BoundingBox {
   y2: number;
 }
 
+export interface Point {
+  x: number;
+  y: number;
+}
+
 export interface Detection {
   /** 1-based, in reading order; matches the "#n" label drawn on the annotated image. */
   id: number;
@@ -37,6 +43,11 @@ export interface Detection {
   score: number;
   scoreType: ScoreType;
   bbox: BoundingBox;
+  /**
+   * Closed polygon tracing the shape's actual boundary, in original-image pixels.
+   * `null` when the detector only reports boxes.
+   */
+  outline: Point[] | null;
 }
 
 export interface DetectionSummary {

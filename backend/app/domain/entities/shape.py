@@ -8,6 +8,7 @@ class ShapeType(StrEnum):
     """
 
     CIRCLE = "circle"
+    ELLIPSE = "ellipse"
     TRIANGLE = "triangle"
     SQUARE = "square"
     RECTANGLE = "rectangle"

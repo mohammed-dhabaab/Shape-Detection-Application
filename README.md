@@ -1,8 +1,9 @@
 # Shape Detection
 
 A full-stack web application that detects and classifies geometric shapes in images.
-Upload a picture, and the app finds every **circle, triangle, square, rectangle,
-pentagon and hexagon**. It draws a bounding box around each one, scores how closely it
+Upload a picture, and the app finds every **circle, ellipse, triangle, square,
+rectangle, pentagon and hexagon**, including shapes whose outlines cross each other.
+It traces each shape's outline along its real edges and corners, scores how closely it
 matches its ideal geometry, and summarises the results.
 
 **Next.js 16 · React 19 · TypeScript · Tailwind CSS 4** on the frontend, and **FastAPI · Pydantic
@@ -17,6 +18,8 @@ matches its ideal geometry, and summarises the results.
     <td width="22%"><img src="docs/screenshots/results-mobile-dark.png" alt="Mobile layout in dark mode" /></td>
   </tr>
 </table>
+
+![A rounded rectangle crossed by an ellipse: both are recovered and traced along their real outlines](docs/screenshots/overlapping-outlines.png)
 
 ---
 
@@ -44,10 +47,12 @@ matches its ideal geometry, and summarises the results.
 ## Features
 
 **Detection**
-- Six shape classes, including rotated shapes, outlined vs filled shapes, light-on-dark
-  images and nested shapes.
-- Bounding boxes in original-image pixel coordinates, plus an annotated JPEG with
-  numbered, colour-coded labels.
+- Seven shape classes, including rotated shapes, outlined vs filled shapes, light-on-dark
+  images, nested shapes and **overlapping line drawings** (e.g. a rectangle crossed by
+  an ellipse, or a Venn diagram).
+- A traced **outline** of each shape (following its real edges and corners) plus a
+  bounding box, both in original-image pixels. The annotated JPEG draws the outlines
+  with numbered, colour-coded labels.
 - **Honest scores.** OpenCV produces a *geometric similarity*, not a neural-network
   confidence, and the API and UI label it that way. A future model would report
   `model_confidence` instead.
@@ -289,11 +294,13 @@ image with no shapes.
 | `MIN_CONTOUR_AREA` | `500` | Smallest shape, in px² of the original image |
 | `CONTOUR_APPROXIMATION_FACTOR` | `0.04` | `approxPolyDP` tolerance (fraction of perimeter) |
 | `CANNY_LOW_THRESHOLD` / `CANNY_HIGH_THRESHOLD` | `30` / `100` | Edge detection hysteresis |
-| `CIRCLE_MIN_CIRCULARITY` / `CIRCLE_MIN_ENCLOSING_FILL` | `0.8` / `0.88` | Circle rules |
+| `CIRCLE_MIN_CIRCULARITY` / `CIRCLE_MIN_ENCLOSING_FILL` | `0.8` / `0.88` | Circle rules (round outlines below the fill threshold are ellipses) |
+| `ELLIPSE_MIN_FIT` | `0.985` | How closely an outline must match its best-fit ellipse to count as round |
 | `SQUARE_ASPECT_RATIO_TOLERANCE` | `0.1` | Square vs rectangle |
 | `MIN_SOLIDITY` | `0.9` | Rejects concave contours |
 | `MIN_DETECTION_SCORE` | `0.8` | Drops weak matches |
 | `DUPLICATE_IOU_THRESHOLD` | `0.6` | Merges duplicate contours of one shape |
+| `REGION_MERGE_MAX_GAP` | `12` | Widest line (processing px) between faces of one shape split by crossing outlines; `0` disables |
 | `ANNOTATED_IMAGE_MAX_DIMENSION` / `ANNOTATED_IMAGE_QUALITY` | `2048` / `85` | Annotated JPEG size and quality |
 
 All values are validated at startup (ranges and cross-field rules), so a
@@ -325,16 +332,19 @@ misconfiguration fails fast instead of misbehaving at runtime.
 
 ## Testing and quality
 
-**Backend: 128 tests, about 1 second.** Fixtures are **generated in code**
+**Backend: 149 tests, about 1 second.** Fixtures are **generated in code**
 (`tests/fixtures/synthetic_images.py`) with known ground truth, so there are no binary
 blobs and each test's intent is explicit.
 
 - *Domain:* bounding-box validation and IoU, score ranges, summary counts and averages
   (including mixed score types), and classifier rules for each class plus the
   circle-vs-hexagon and square-vs-rectangle boundaries.
-- *Detector:* each class; rotated squares; outlined vs filled; dark backgrounds; shapes
-  distinguishable only by hue; nested shapes; noise plus JPEG artefacts; large-image
-  downscaling with box re-mapping; no-shape images; rejection of ellipses and stars.
+- *Detector:* each class; rotated squares; flat, rotated and outlined ellipses; outlined
+  vs filled; dark backgrounds; shapes distinguishable only by hue; nested shapes;
+  overlapping outlines (a rounded rectangle crossed by an ellipse, a Venn diagram); a grid
+  of squares that must not produce extra rectangles; noise plus JPEG artefacts;
+  large-image downscaling with box re-mapping; no-shape images; rejection of octagons
+  and stars.
 - *Decoder:* JPEG/PNG/WebP accepted; GIF, BMP, TIFF and PDF rejected; truncated and
   corrupted files; transparency; EXIF orientation; dimension limits; a crafted
   100 000 × 100 000 decompression bomb.
@@ -344,7 +354,7 @@ blobs and each test's intent is explicit.
   streamed bodies without `Content-Length`; CORS allow and deny; a sanitised 500 that
   keeps CORS headers and the request ID.
 
-**Frontend: 47 tests** (Vitest + Testing Library): file validation, response parsing
+**Frontend: 51 tests** (Vitest + Testing Library): file validation, response parsing
 (including malformed payloads), score formatting, HTTP error normalisation, the
 detection state machine (duplicate submissions, aborts, stale responses, unmount), the
 dropzone (keyboard, drag-and-drop, ARIA wiring), and full page flows (upload → loading →
@@ -400,7 +410,8 @@ curl -F "file=@samples/all-shapes.png" http://localhost:8000/api/v1/detect
       "class_name": "circle",
       "score": 0.9806,
       "score_type": "geometric_similarity",
-      "bbox": { "x1": 69, "y1": 69, "x2": 232, "y2": 232 }
+      "bbox": { "x1": 69, "y1": 69, "x2": 232, "y2": 232 },
+      "outline": [[150, 69], [177, 73], [201, 84], ...]
     }
   ],
   "summary": {
@@ -417,6 +428,10 @@ curl -F "file=@samples/all-shapes.png" http://localhost:8000/api/v1/detect
 - `id` is 1-based in **reading order** (rows top to bottom, left to right within a row)
   and matches the `#n` label on the annotated image.
 - `bbox` uses original-image pixels; `x1`/`y1` are inclusive and `x2`/`y2` exclusive.
+- `outline` is a closed polygon of `[x, y]` points tracing the shape's **actual boundary**
+  (within 1 px): corners where the shape has corners, a smooth curve for round shapes.
+  It's what the annotated image and the UI highlight draw. It's `null` for detectors
+  that only produce boxes, in which case both fall back to the box.
 - `score_type` is `geometric_similarity` (OpenCV) or `model_confidence` (learned
   detectors). `average_score` is `null` when there are no detections or the types are mixed.
 - **No shapes is a successful `200`** with an empty `detections` list, not an error.
@@ -455,30 +470,44 @@ Every error has the same envelope, with a stable machine-readable `code`:
 5. **Close gaps** in the edges with a morphological close.
 6. **Find contours** with `RETR_TREE`, so nested shapes are found too. Contours are
    filtered by minimum area and by a maximum fraction of the image (to drop the frame).
-7. **Measure** each contour, producing scale-invariant features: vertex count after
+7. **Recover overlapping outlines.** Where outlines cross, the lines split the picture into
+   *faces*, and no single face is a shape. A rectangle crossed by an ellipse becomes
+   "rectangle minus lens", "lens" and "ellipse minus lens". The detector therefore also
+   tries unions of 2–3 neighbouring faces separated only by a thin line (at most
+   `REGION_MERGE_MAX_GAP` px): it fuses them with a morphological close and sends the
+   outline through the same classification. A union is only considered when at least one
+   of its faces is *not* a shape on its own, so a grid of squares doesn't also produce
+   rectangles made of two squares.
+8. **Measure** each contour, producing scale-invariant features: vertex count after
    `approxPolyDP`, circularity (4πA/P²), solidity (area / convex hull), rotated aspect
-   ratio (`minAreaRect`), polygon fit, enclosing-circle fill, and interior angles.
-8. **Classify** in the domain `ShapeClassifier`:
-   - Concave contours are rejected.
-   - A **circle** needs high circularity *and* must fill its minimum enclosing circle.
-     Approximating a circle's outline yields an arbitrary 5–8 vertices, so vertex
-     counting alone can't separate circles from hexagons. A regular hexagon fills about
-     83% of its enclosing circle; a circle fills about 100%.
-   - Otherwise shapes are classified by vertex count: 3 is a triangle, 4 is a square or
-     rectangle (depending on the *rotated* aspect ratio, so a 45° square is still a
-     square), 5 is a pentagon and 6 is a hexagon. Anything else is rejected.
-9. **Score** (geometric similarity, 0–1):
+   ratio (`minAreaRect`), polygon fit, enclosing-circle fill, **ellipse fit** (1 − the
+   mean radial deviation of the resampled outline from its best-fit ellipse), and
+   interior angles.
+9. **Classify** in the domain `ShapeClassifier`. Concave contours are rejected. Each
+   outline is then scored both as a round shape and as a polygon, and the better match
+   wins. Approximating a curve yields an arbitrary 5–8 vertices, so vertex counting alone
+   can't tell an ellipse from a hexagon.
+   - **Round:** the outline must fit an ellipse almost perfectly (true ellipses measure
+     ≥ 0.99; regular polygons at most about 0.98). It's a **circle** if it also fills its
+     minimum enclosing circle (≥ 0.88), otherwise an **ellipse**.
+   - **Polygon:** by vertex count. 3 is a triangle; 4 is a square or rectangle, depending
+     on the *rotated* aspect ratio, so a 45° square is still a square; 5 is a pentagon;
+     6 is a hexagon.
+10. **Score** (geometric similarity, 0–1):
    - Polygons: the area agreement between the contour and its fitted polygon, times solidity.
    - Quadrilaterals, pentagons and hexagons: also multiplied by angle regularity, and
      squares by their aspect ratio.
-   - Circles: enclosing-circle fill times solidity.
-   - Detections below `MIN_DETECTION_SCORE` are dropped.
-10. **Merge duplicates**: each edge yields inner and outer contours, and outlined shapes
+   - Circles: enclosing-circle fill times solidity. Ellipses: ellipse fit times solidity.
+   - Detections below `MIN_DETECTION_SCORE` are dropped. Rounded corners lower a
+     rectangle's score, as they should.
+11. **Merge duplicates**: each edge yields inner and outer contours, and outlined shapes
     yield two per stroke. Class-aware suppression merges same-class overlaps, keeping
     the best score and the outermost extent. A circle inside a square survives because
     it's a different class.
-11. **Annotate**: draw colour-coded boxes and `#n class score` labels, scaled to the
-    output size, and encode as JPEG.
+12. **Trace the outline**: simplify the classified contour with `approxPolyDP` to within
+    1 px of the real boundary (a few dozen points), then map it back to full resolution.
+13. **Annotate**: draw each colour-coded outline with its `#n class score` label, scaled
+    to the output size, and encode as JPEG.
 
 ---
 
@@ -487,12 +516,12 @@ Every error has the same envelope, with a stable machine-readable `code`:
 - **Classical CV, not learned recognition.** It works best on clear, flat-coloured
   shapes with distinct edges: diagrams, graphics, and photos of printed shapes. Busy
   photographs, soft shadows, textures and heavy blur reduce accuracy.
-- **Occlusion:** overlapping shapes merge into a single contour. The score threshold
-  suppresses most of the resulting non-shapes, but the partly hidden shape isn't
-  recovered.
-- **Unsupported shapes:** ellipses, stars and irregular polygons are rejected
-  (intentionally). A regular octagon fills its enclosing circle about as well as a
-  circle does and may be reported as a circle.
+- **Occlusion of filled shapes:** overlapping *outlines* are recovered, but when one
+  *filled* shape covers another, the hidden part simply isn't in the image. The two merge
+  into one contour, which the score threshold usually rejects.
+- **Line drawings:** crossing outlines are recovered when the lines are at most
+  `REGION_MERGE_MAX_GAP` px thick and a shape is split into at most three faces.
+- **Unsupported shapes:** stars, octagons and other polygons are rejected (intentionally).
 - Same-class concentric shapes that overlap by more than `DUPLICATE_IOU_THRESHOLD`
   are merged into one.
 - Only the first frame of animated PNG/WebP files is analysed.

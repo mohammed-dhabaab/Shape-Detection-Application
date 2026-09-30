@@ -43,16 +43,27 @@ class DetectionSchema(_Schema):
         )
     )
     bbox: BoundingBoxSchema
+    outline: list[tuple[int, int]] | None = Field(
+        default=None,
+        description=(
+            "Closed polygon tracing the shape's actual boundary, as `[x, y]` pixel "
+            "coordinates of the original image (within 1 px of the real edge). `null` "
+            "when the detector only produces boxes."
+        ),
+        examples=[[[120, 80], [420, 80], [420, 380], [120, 380]]],
+    )
 
     @classmethod
     def from_domain(cls, detection_id: int, detection: Detection) -> Self:
         bbox = detection.bbox
+        outline = detection.outline
         return cls(
             id=detection_id,
             class_name=detection.shape,
             score=detection.score.value,
             score_type=detection.score.type,
             bbox=BoundingBoxSchema(x1=bbox.x1, y1=bbox.y1, x2=bbox.x2, y2=bbox.y2),
+            outline=[(p.x, p.y) for p in outline.points] if outline is not None else None,
         )
 
 

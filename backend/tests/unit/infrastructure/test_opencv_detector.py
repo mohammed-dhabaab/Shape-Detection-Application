@@ -1,12 +1,15 @@
+from dataclasses import replace
+
 import cv2
 import numpy as np
 import pytest
 
 from app.application.dto import DecodedImage, ImageFormat
 from app.domain.entities import Detection, ShapeType
-from app.domain.value_objects import BoundingBox, DetectionScore, ScoreType
+from app.domain.value_objects import BoundingBox, DetectionScore, Outline, Point, ScoreType
 from app.infrastructure.detectors.opencv import OpenCVDetectorConfig, OpenCVShapeDetector
 from app.infrastructure.detectors.opencv.detector import merge_duplicates
+from app.infrastructure.detectors.opencv.regions import RegionMergeConfig
 from tests.fixtures.synthetic_images import (
     DARK,
     ShapeSpec,
@@ -67,7 +70,7 @@ def test_detects_multiple_shapes_of_multiple_classes() -> None:
     detections = detect(pixels)
 
     assert_matches(detections, shapes)
-    assert {d.shape for d in detections} == set(ShapeType)
+    assert {d.shape.value for d in detections} == {spec.name for spec in shapes}
 
 
 def test_detects_multiple_shapes_of_the_same_class() -> None:
@@ -158,7 +161,14 @@ def test_returns_nothing_when_no_supported_shape_is_present(label: str, pixels: 
 
 def test_ignores_unsupported_shapes() -> None:
     canvas = render([])
-    cv2.ellipse(canvas, (250, 300), (200, 70), 0, 0, 360, (0, 0, 200), -1)
+    octagon = [
+        (
+            220 + 130 * np.cos(np.pi / 8 + i * np.pi / 4),
+            300 + 130 * np.sin(np.pi / 8 + i * np.pi / 4),
+        )
+        for i in range(8)
+    ]
+    cv2.fillPoly(canvas, [np.array(octagon, dtype=np.int32)], (0, 0, 200))
     angles = np.linspace(-np.pi / 2, 3 * np.pi / 2, 10, endpoint=False)
     radii = np.where(np.arange(10) % 2 == 0, 120, 50)
     star = np.stack([600 + radii * np.cos(angles), 300 + radii * np.sin(angles)], axis=1)
@@ -200,6 +210,15 @@ class TestMergeDuplicates:
         assert merged.score.value == 0.95
         assert merged.bbox == BoundingBox(0, 0, 100, 100)
 
+    def test_keeps_the_outermost_outline(self) -> None:
+        outer_outline = Outline((Point(0, 0), Point(99, 0), Point(99, 99), Point(0, 99)))
+        outer = replace(self.make(ShapeType.SQUARE, (0, 0, 100, 100), 0.85), outline=outer_outline)
+        inner = self.make(ShapeType.SQUARE, (4, 4, 96, 96), 0.95)
+
+        (merged,) = merge_duplicates([outer, inner], 0.6)
+
+        assert merged.outline == outer_outline
+
     def test_keeps_overlapping_detections_of_different_classes(self) -> None:
         square = self.make(ShapeType.SQUARE, (0, 0, 100, 100), 0.9)
         circle = self.make(ShapeType.CIRCLE, (1, 1, 99, 99), 0.9)
@@ -211,3 +230,144 @@ class TestMergeDuplicates:
         second = self.make(ShapeType.CIRCLE, (200, 200, 250, 250), 0.9)
 
         assert len(merge_duplicates([first, second], 0.6)) == 2
+
+
+@pytest.mark.parametrize(
+    "spec",
+    [
+        ShapeSpec("ellipse", (400, 300), 200, aspect=0.35),
+        ShapeSpec("ellipse", (400, 300), 180, aspect=0.6, rotation_deg=30),
+        ShapeSpec("ellipse", (400, 300), 185, aspect=0.83, thickness=4),
+    ],
+    ids=["flat", "rotated", "outlined-near-circle"],
+)
+def test_detects_ellipses(spec: ShapeSpec) -> None:
+    assert_matches(detect(render([spec])), [spec])
+
+
+def rounded_rectangle_outline(
+    canvas: np.ndarray, top_left: tuple[int, int], size: tuple[int, int], radius: int
+) -> None:
+    (x1, y1), (width, height) = top_left, size
+    x2, y2 = x1 + width, y1 + height
+    black, stroke = (0, 0, 0), 4
+    cv2.line(canvas, (x1 + radius, y1), (x2 - radius, y1), black, stroke, cv2.LINE_AA)
+    cv2.line(canvas, (x1 + radius, y2), (x2 - radius, y2), black, stroke, cv2.LINE_AA)
+    cv2.line(canvas, (x1, y1 + radius), (x1, y2 - radius), black, stroke, cv2.LINE_AA)
+    cv2.line(canvas, (x2, y1 + radius), (x2, y2 - radius), black, stroke, cv2.LINE_AA)
+    for centre, start in (
+        ((x1 + radius, y1 + radius), 180),
+        ((x2 - radius, y1 + radius), 270),
+        ((x2 - radius, y2 - radius), 0),
+        ((x1 + radius, y2 - radius), 90),
+    ):
+        cv2.ellipse(
+            canvas, centre, (radius, radius), 0, start, start + 90, black, stroke, cv2.LINE_AA
+        )
+
+
+def test_recovers_overlapping_outlined_shapes() -> None:
+    """Crossing outlines split both shapes into faces; neither face is a shape alone.
+
+    Mirrors a real user drawing: a rounded rectangle overlapped by an ellipse.
+    """
+    canvas = render([], width=1200, height=860)
+    rounded_rectangle_outline(canvas, (313, 232), (430, 345), radius=65)
+    cv2.ellipse(canvas, (744, 568), (185, 153), 0, 0, 360, (0, 0, 0), 4, cv2.LINE_AA)
+
+    detections = detect(canvas)
+
+    assert sorted(d.shape.value for d in detections) == ["ellipse", "rectangle"]
+    rectangle = next(d for d in detections if d.shape is ShapeType.RECTANGLE)
+    ellipse = next(d for d in detections if d.shape is ShapeType.ELLIPSE)
+    assert_bbox_close(rectangle.bbox, (313, 232, 743, 577))
+    assert_bbox_close(ellipse.bbox, (559, 415, 929, 721))
+
+
+def test_recovers_both_circles_of_a_venn_diagram() -> None:
+    shapes = [
+        ShapeSpec("circle", (320, 300), 150, color=(0, 0, 0), thickness=4),
+        ShapeSpec("circle", (500, 300), 150, color=(0, 0, 0), thickness=4),
+    ]
+
+    assert_matches(detect(render(shapes)), shapes)
+
+
+def test_does_not_invent_shapes_from_adjacent_complete_shapes() -> None:
+    # A 2x2 grid of squares: two neighbouring squares also form a rectangle, but every
+    # face is already a complete square, so no merged shapes are proposed.
+    canvas = render([])
+    black = (0, 0, 0)
+    for offset in (0, 150, 300):
+        cv2.line(canvas, (250 + offset, 150), (250 + offset, 450), black, 4)
+        cv2.line(canvas, (250, 150 + offset), (550, 150 + offset), black, 4)
+
+    detections = detect(canvas)
+
+    assert detections
+    assert {d.shape for d in detections} == {ShapeType.SQUARE}
+
+
+def test_region_merging_can_be_disabled() -> None:
+    shapes = [
+        ShapeSpec("circle", (320, 300), 150, color=(0, 0, 0), thickness=4),
+        ShapeSpec("circle", (500, 300), 150, color=(0, 0, 0), thickness=4),
+    ]
+    config = OpenCVDetectorConfig(region_merge=RegionMergeConfig(max_gap=0))
+
+    detections = OpenCVShapeDetector(config).detect(DecodedImage(render(shapes), ImageFormat.PNG))
+
+    assert detections == []
+
+
+def outline_array(detection: Detection) -> np.ndarray:
+    assert detection.outline is not None
+    return np.array([(p.x, p.y) for p in detection.outline.points], dtype=np.float64)
+
+
+def test_every_detection_traces_its_outline() -> None:
+    _, pixels = all_shapes_scene()
+
+    for detection in detect(pixels):
+        points = outline_array(detection)
+        bbox = detection.bbox
+        assert len(points) >= 3
+        assert points[:, 0].min() >= bbox.x1
+        assert points[:, 0].max() < bbox.x2
+        assert points[:, 1].min() >= bbox.y1
+        assert points[:, 1].max() < bbox.y2
+
+
+def test_polygon_outline_hits_the_real_corners() -> None:
+    spec = ShapeSpec("triangle", (300, 300), 160, rotation_deg=17)
+
+    (detection,) = detect(render([spec]))
+    points = outline_array(detection)
+
+    # Every true corner has an outline point on it (within a few px of anti-aliasing),
+    # instead of the box corners that lie outside the triangle.
+    for corner in spec.points():
+        assert np.linalg.norm(points - corner, axis=1).min() <= 4
+
+
+def test_round_outline_follows_the_curve() -> None:
+    spec = ShapeSpec("circle", (300, 300), 120)
+
+    (detection,) = detect(render([spec]))
+    radii = np.linalg.norm(outline_array(detection) - np.array(spec.center), axis=1)
+
+    assert np.abs(radii - spec.size).max() <= 3
+    assert len(radii) >= 16  # enough points for a smooth curve
+
+
+def test_outlines_are_in_original_coordinates_for_large_images() -> None:
+    spec = ShapeSpec("square", (300, 300), 200, rotation_deg=20)
+    factor = 4
+    large = cv2.resize(render([spec]), None, fx=factor, fy=factor, interpolation=cv2.INTER_NEAREST)
+    config = OpenCVDetectorConfig(processing_max_dimension=800)
+
+    (detection,) = OpenCVShapeDetector(config).detect(DecodedImage(large, ImageFormat.PNG))
+    points = outline_array(detection)
+
+    for corner in spec.points() * factor:
+        assert np.linalg.norm(points - corner, axis=1).min() <= 4 * factor

@@ -54,6 +54,7 @@ function toDetection(dto: DetectionDto): Detection {
     score: dto.score,
     scoreType: dto.score_type as ScoreType,
     bbox: toBoundingBox(dto.bbox),
+    outline: dto.outline ? dto.outline.map(([x, y]) => ({ x, y })) : null,
   };
 }
 
@@ -88,7 +89,22 @@ function isDetectionDto(value: unknown): value is DetectionDto {
     isShapeClass(value.class_name) &&
     isUnitInterval(value.score) &&
     isScoreType(value.score_type) &&
-    isBoundingBoxDto(value.bbox)
+    isBoundingBoxDto(value.bbox) &&
+    (value.outline === undefined || value.outline === null || isOutlineDto(value.outline))
+  );
+}
+
+function isOutlineDto(value: unknown): value is Array<[number, number]> {
+  return (
+    Array.isArray(value) &&
+    value.length >= 3 &&
+    value.every(
+      (point) =>
+        Array.isArray(point) &&
+        point.length === 2 &&
+        isNonNegativeInteger(point[0]) &&
+        isNonNegativeInteger(point[1]),
+    )
   );
 }
 

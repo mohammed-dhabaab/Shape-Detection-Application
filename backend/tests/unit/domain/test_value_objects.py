@@ -1,6 +1,13 @@
 import pytest
 
-from app.domain.value_objects import BoundingBox, DetectionScore, ImageSize, ScoreType
+from app.domain.value_objects import (
+    BoundingBox,
+    DetectionScore,
+    ImageSize,
+    Outline,
+    Point,
+    ScoreType,
+)
 
 
 class TestBoundingBox:
@@ -53,3 +60,18 @@ class TestImageSize:
 
     def test_pixels(self) -> None:
         assert ImageSize(width=4, height=3).pixels == 12
+
+
+class TestOutline:
+    def test_bounding_box_encloses_every_point(self) -> None:
+        outline = Outline((Point(10, 5), Point(40, 20), Point(15, 30)))
+
+        assert outline.bounding_box() == BoundingBox(10, 5, 41, 31)
+
+    def test_requires_a_polygon(self) -> None:
+        with pytest.raises(ValueError, match="at least 3 points"):
+            Outline((Point(0, 0), Point(5, 5)))
+
+    def test_rejects_negative_coordinates(self) -> None:
+        with pytest.raises(ValueError, match="non-negative"):
+            Outline((Point(-1, 0), Point(5, 5), Point(0, 5)))

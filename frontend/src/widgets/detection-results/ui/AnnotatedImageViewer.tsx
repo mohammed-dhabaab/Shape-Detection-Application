@@ -1,11 +1,12 @@
 "use client";
 
-import { useId, useState } from "react";
+import { useId, useState, type SVGProps } from "react";
 
 import {
   SHAPE_META,
   orderedClassCounts,
   shapeCountLabel,
+  type Detection,
   type DetectionResult,
 } from "@/entities/detection";
 import { cn, pluralize } from "@/shared/lib";
@@ -95,13 +96,7 @@ export function AnnotatedImageViewer({
               <defs>
                 <mask id={maskId}>
                   <rect width={width} height={height} fill="white" />
-                  <rect
-                    x={active.bbox.x1}
-                    y={active.bbox.y1}
-                    width={active.bbox.x2 - active.bbox.x1}
-                    height={active.bbox.y2 - active.bbox.y1}
-                    fill="black"
-                  />
+                  <DetectionShape detection={active} fill="black" />
                 </mask>
               </defs>
               <rect
@@ -111,14 +106,12 @@ export function AnnotatedImageViewer({
                 opacity={0.45}
                 mask={`url(#${maskId})`}
               />
-              <rect
-                x={active.bbox.x1}
-                y={active.bbox.y1}
-                width={active.bbox.x2 - active.bbox.x1}
-                height={active.bbox.y2 - active.bbox.y1}
+              <DetectionShape
+                detection={active}
                 fill="none"
                 stroke={SHAPE_META[active.shape].color}
                 strokeWidth={3}
+                strokeLinejoin="round"
                 vectorEffect="non-scaling-stroke"
               />
             </svg>
@@ -132,5 +125,19 @@ export function AnnotatedImageViewer({
           : ""}
       </figcaption>
     </figure>
+  );
+}
+
+/** The detection's traced outline, or its box when the detector provides none. */
+function DetectionShape({
+  detection,
+  ...props
+}: { detection: Detection } & SVGProps<SVGPolygonElement & SVGRectElement>) {
+  const { outline, bbox } = detection;
+  if (outline) {
+    return <polygon points={outline.map(({ x, y }) => `${x},${y}`).join(" ")} {...props} />;
+  }
+  return (
+    <rect x={bbox.x1} y={bbox.y1} width={bbox.x2 - bbox.x1} height={bbox.y2 - bbox.y1} {...props} />
   );
 }

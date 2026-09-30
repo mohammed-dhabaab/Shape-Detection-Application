@@ -17,6 +17,8 @@ export interface DetectionDto {
   score: number;
   score_type: string;
   bbox: BoundingBoxDto;
+  /** `[x, y]` pairs; absent or null for box-only detectors. */
+  outline?: Array<[number, number]> | null;
 }
 
 export interface DetectionSummaryDto {

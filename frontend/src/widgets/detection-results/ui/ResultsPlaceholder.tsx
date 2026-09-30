@@ -22,7 +22,7 @@ export function ResultsPlaceholder() {
         <p className="text-base font-semibold text-fg">Results will appear here</p>
         <p className="text-sm text-fg-muted">
           Upload an image and select <span className="font-medium text-fg">Detect shapes</span>.
-          Circles, triangles, squares, rectangles, pentagons and hexagons are recognised.
+          Circles, ellipses, triangles, squares, rectangles, pentagons and hexagons are recognised.
         </p>
       </div>
     </div>

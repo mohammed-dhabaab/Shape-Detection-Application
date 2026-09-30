@@ -1,5 +1,6 @@
 import {
   Circle,
+  Ellipse,
   Hexagon,
   Pentagon,
   RectangleHorizontal,
@@ -23,6 +24,7 @@ export interface ShapeMeta {
 
 export const SHAPE_META: Record<ShapeClass, ShapeMeta> = {
   circle: { label: "Circle", pluralLabel: "Circles", icon: Circle, color: "#2563eb" },
+  ellipse: { label: "Ellipse", pluralLabel: "Ellipses", icon: Ellipse, color: "#db2777" },
   triangle: { label: "Triangle", pluralLabel: "Triangles", icon: Triangle, color: "#16a34a" },
   square: { label: "Square", pluralLabel: "Squares", icon: Square, color: "#dc2626" },
   rectangle: {

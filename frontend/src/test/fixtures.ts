@@ -36,6 +36,12 @@ export function detectionResponseDto(
         score: 0.94,
         score_type: "geometric_similarity",
         bbox: { x1: 120, y1: 80, x2: 420, y2: 380 },
+        outline: [
+          [270, 80],
+          [419, 230],
+          [270, 379],
+          [120, 230],
+        ],
       },
       {
         id: 2,
@@ -43,6 +49,7 @@ export function detectionResponseDto(
         score: 0.9,
         score_type: "geometric_similarity",
         bbox: { x1: 500, y1: 100, x2: 700, y2: 280 },
+        outline: null,
       },
     ],
     summary: {
@@ -67,6 +74,12 @@ export function detectionResult(overrides: Partial<DetectionResult> = {}): Detec
         score: 0.94,
         scoreType: "geometric_similarity",
         bbox: { x1: 120, y1: 80, x2: 420, y2: 380 },
+        outline: [
+          { x: 270, y: 80 },
+          { x: 419, y: 230 },
+          { x: 270, y: 379 },
+          { x: 120, y: 230 },
+        ],
       },
       {
         id: 2,
@@ -74,6 +87,7 @@ export function detectionResult(overrides: Partial<DetectionResult> = {}): Detec
         score: 0.9,
         scoreType: "geometric_similarity",
         bbox: { x1: 500, y1: 100, x2: 700, y2: 280 },
+        outline: null,
       },
     ],
     summary: {

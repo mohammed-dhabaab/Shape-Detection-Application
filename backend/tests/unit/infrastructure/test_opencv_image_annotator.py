@@ -3,7 +3,7 @@ import numpy as np
 
 from app.application.dto import DecodedImage, ImageFormat
 from app.domain.entities import Detection, ShapeType
-from app.domain.value_objects import BoundingBox, DetectionScore, ScoreType
+from app.domain.value_objects import BoundingBox, DetectionScore, Outline, Point, ScoreType
 from app.infrastructure.image_processing import AnnotationStyle, OpenCVImageAnnotator
 from tests.fixtures.synthetic_images import render
 
@@ -66,3 +66,24 @@ def test_handles_no_detections() -> None:
     encoded = OpenCVImageAnnotator(AnnotationStyle()).annotate(image, [])
 
     assert decode_jpeg(encoded.data).shape == (80, 120, 3)
+
+
+def test_draws_the_outline_instead_of_the_box() -> None:
+    image = DecodedImage(render([], width=400, height=300), ImageFormat.PNG)
+    triangle = Detection(
+        shape=ShapeType.TRIANGLE,
+        bbox=BoundingBox(100, 60, 301, 261),
+        score=DetectionScore(0.9, ScoreType.GEOMETRIC_SIMILARITY),
+        outline=Outline((Point(200, 60), Point(300, 260), Point(100, 260))),
+    )
+
+    annotated = decode_jpeg(
+        OpenCVImageAnnotator(AnnotationStyle()).annotate(image, [triangle]).data
+    )
+
+    # The triangle's edge is drawn in the triangle colour (green-ish, BGR) ...
+    _, green, red = annotated[260, 200].astype(int)
+    assert green > 120
+    assert red < 120
+    # ... while the bottom-left corner of its box, outside the triangle, stays blank.
+    assert tuple(annotated[250, 110]) >= (235, 235, 235)

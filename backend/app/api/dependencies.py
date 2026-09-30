@@ -10,7 +10,11 @@ from app.application.ports import ShapeDetector
 from app.application.use_cases import DetectShapes
 from app.core.config import Settings
 from app.domain.services import ClassificationRules
-from app.infrastructure.detectors.opencv import OpenCVDetectorConfig, OpenCVShapeDetector
+from app.infrastructure.detectors.opencv import (
+    OpenCVDetectorConfig,
+    OpenCVShapeDetector,
+    RegionMergeConfig,
+)
 from app.infrastructure.image_processing import (
     AnnotationStyle,
     ImageLimits,
@@ -66,10 +70,12 @@ def build_detector(settings: Settings) -> ShapeDetector:
                     canny_low_threshold=settings.canny_low_threshold,
                     canny_high_threshold=settings.canny_high_threshold,
                     duplicate_iou_threshold=settings.duplicate_iou_threshold,
+                    region_merge=RegionMergeConfig(max_gap=settings.region_merge_max_gap),
                     classification=ClassificationRules(
                         min_solidity=settings.min_solidity,
                         circle_min_circularity=settings.circle_min_circularity,
                         circle_min_enclosing_fill=settings.circle_min_enclosing_fill,
+                        ellipse_min_fit=settings.ellipse_min_fit,
                         square_aspect_ratio_tolerance=settings.square_aspect_ratio_tolerance,
                         min_score=settings.min_detection_score,
                     ),

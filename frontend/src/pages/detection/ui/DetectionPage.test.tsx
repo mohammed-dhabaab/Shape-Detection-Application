@@ -73,6 +73,9 @@ describe("DetectionPage", () => {
     await user.click(circle);
     expect(circle).toHaveAttribute("aria-pressed", "true");
     expect(screen.getByText(/highlighting #1 circle/i)).toBeInTheDocument();
+    // The highlight follows the traced outline rather than the box.
+    const highlight = document.querySelector("figure svg polygon[stroke]");
+    expect(highlight).toHaveAttribute("points", "270,80 419,230 270,379 120,230");
 
     expect(screen.getByText("Avg. geometric similarity")).toBeInTheDocument();
     expect(screen.getByText("92%")).toBeInTheDocument();

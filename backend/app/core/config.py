@@ -42,10 +42,16 @@ class Settings(BaseSettings):
     canny_high_threshold: int = Field(default=100, ge=1, le=255)
     circle_min_circularity: float = Field(default=0.8, gt=0, le=1)
     circle_min_enclosing_fill: float = Field(default=0.88, gt=0, le=1)
+    ellipse_min_fit: float = Field(default=0.985, gt=0, le=1)
     square_aspect_ratio_tolerance: float = Field(default=0.1, ge=0, lt=1)
     min_solidity: float = Field(default=0.9, gt=0, le=1)
     min_detection_score: float = Field(default=0.8, ge=0, le=1)
     duplicate_iou_threshold: float = Field(default=0.6, gt=0, le=1)
+    region_merge_max_gap: int = Field(
+        default=12,
+        ge=0,
+        description="Widest line (px) separating faces of one shape; 0 disables region merging.",
+    )
 
     # --- Annotation ----------------------------------------------------------------------
     annotated_image_max_dimension: int = Field(default=2048, ge=64)

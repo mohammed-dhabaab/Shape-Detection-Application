@@ -3,16 +3,21 @@ from collections.abc import Iterable
 from dataclasses import dataclass, field
 
 from app.domain.entities.shape import ShapeType
-from app.domain.value_objects import BoundingBox, DetectionScore, ImageSize, ScoreType
+from app.domain.value_objects import BoundingBox, DetectionScore, ImageSize, Outline, ScoreType
 
 
 @dataclass(frozen=True, slots=True)
 class Detection:
-    """A single shape found in an image, independent of how it was found."""
+    """A single shape found in an image, independent of how it was found.
+
+    ``outline`` traces the shape itself (its corners, or its fitted curve). It is
+    optional because some detectors, such as box-regression models, only produce boxes.
+    """
 
     shape: ShapeType
     bbox: BoundingBox
     score: DetectionScore
+    outline: Outline | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -58,9 +63,14 @@ class DetectionResult:
     summary: DetectionSummary = field(init=False)
 
     def __post_init__(self) -> None:
+        width, height = self.image_size.width, self.image_size.height
         for detection in self.detections:
             bbox = detection.bbox
-            if bbox.x2 > self.image_size.width or bbox.y2 > self.image_size.height:
+            if bbox.x2 > width or bbox.y2 > height:
                 msg = f"Bounding box {bbox} exceeds image bounds {self.image_size}"
+                raise ValueError(msg)
+            outline = detection.outline
+            if outline and any(p.x >= width or p.y >= height for p in outline.points):
+                msg = f"Outline of {detection.shape} exceeds image bounds {self.image_size}"
                 raise ValueError(msg)
         object.__setattr__(self, "summary", DetectionSummary.from_detections(self.detections))

@@ -1,6 +1,7 @@
 from dataclasses import dataclass, field
 
 from app.domain.services import ClassificationRules
+from app.infrastructure.detectors.opencv.regions import RegionMergeConfig
 
 
 @dataclass(frozen=True, slots=True)
@@ -21,6 +22,9 @@ class OpenCVDetectorConfig:
         morph_kernel_size: Kernel used to close small gaps in the edge map.
         duplicate_iou_threshold: Same-class detections overlapping at least this much
             are merged into one shape (edges of a shape yield inner and outer contours).
+        outline_tolerance: Maximum deviation (original-image pixels) of a detection's
+            traced outline from the shape's real boundary.
+        region_merge: How faces split by crossing outlines are recombined into shapes.
         classification: Rules used to turn contour geometry into a shape class.
     """
 
@@ -33,6 +37,8 @@ class OpenCVDetectorConfig:
     canny_high_threshold: int = 100
     morph_kernel_size: int = 3
     duplicate_iou_threshold: float = 0.6
+    outline_tolerance: float = 1.0
+    region_merge: RegionMergeConfig = field(default_factory=RegionMergeConfig)
     classification: ClassificationRules = field(default_factory=ClassificationRules)
 
     def __post_init__(self) -> None:

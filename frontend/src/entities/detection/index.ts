@@ -14,6 +14,7 @@ export {
   type Detection,
   type DetectionResult,
   type DetectionSummary,
+  type Point,
   type ScoreType,
   type ShapeClass,
 } from "./model/types";

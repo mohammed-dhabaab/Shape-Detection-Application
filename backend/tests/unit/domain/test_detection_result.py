@@ -1,7 +1,14 @@
 import pytest
 
 from app.domain.entities import Detection, DetectionResult, ShapeType
-from app.domain.value_objects import BoundingBox, DetectionScore, ImageSize, ScoreType
+from app.domain.value_objects import (
+    BoundingBox,
+    DetectionScore,
+    ImageSize,
+    Outline,
+    Point,
+    ScoreType,
+)
 
 
 def detection(
@@ -65,3 +72,16 @@ def test_rejects_boxes_outside_the_image() -> None:
             image_size=ImageSize(50, 50),
             detections=(detection(ShapeType.SQUARE, bbox=BoundingBox(40, 40, 60, 60)),),
         )
+
+
+def test_rejects_outlines_outside_the_image() -> None:
+    outside = Outline((Point(10, 10), Point(60, 10), Point(10, 40)))
+    detection_with_outline = Detection(
+        shape=ShapeType.TRIANGLE,
+        bbox=BoundingBox(10, 10, 40, 40),
+        score=DetectionScore(0.9, ScoreType.GEOMETRIC_SIMILARITY),
+        outline=outside,
+    )
+
+    with pytest.raises(ValueError, match="Outline"):
+        DetectionResult(image_size=ImageSize(50, 50), detections=(detection_with_outline,))

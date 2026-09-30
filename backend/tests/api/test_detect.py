@@ -30,6 +30,11 @@ class TestSuccessfulDetection:
         assert detection["score_type"] == "geometric_similarity"
         assert 0.85 <= detection["score"] <= 1
         assert set(detection["bbox"]) == {"x1", "y1", "x2", "y2"}
+        outline = detection["outline"]
+        assert len(outline) >= 8
+        assert all(
+            len(point) == 2 and 0 <= point[0] < 800 and 0 <= point[1] < 600 for point in outline
+        )
         assert body["summary"] == {
             "total": 1,
             "classes": 1,
